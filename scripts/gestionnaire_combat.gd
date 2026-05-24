@@ -172,7 +172,6 @@ func _appliquer_bonus_fusion() -> void:
 	if not fusion.en_fusion:
 		return
 	if not totem.est_vivant():
-		# Le totem est mort : la fusion se termine immédiatement
 		fusion.tours_restants = 0
 		fusion.en_fusion = false
 		_log("--- La fusion se termine (totem hors combat) ---")
@@ -180,10 +179,19 @@ func _appliquer_bonus_fusion() -> void:
 		joueur.couleur = _couleur_joueur_originale
 		joueur.queue_redraw()
 		return
-	var soin: int = min(fusion.soin_fusion, joueur.pv_max - joueur.pv_actuels)
-	joueur.pv_actuels += soin
-	joueur.queue_redraw()
-	_log("[Fusion] Le Totem te soigne de %d PV !" % soin)
+	match totem.type_axe:
+		Totem.TypeAxe.AGITATION:
+			# Soin fiable et amplifié après chaque action
+			var soin: int = min(fusion.soin_fusion, joueur.pv_max - joueur.pv_actuels)
+			joueur.pv_actuels += soin
+			joueur.queue_redraw()
+			_log("[Fusion] Le Totem te soigne de %d PV !" % soin)
+		Totem.TypeAxe.COLERE:
+			# L'effet se produit côté ennemi (voir _executer_tour_ennemi)
+			_log("[Fusion Colère] Actif — les ennemis brûlent quand ils te frappent.")
+		Totem.TypeAxe.PEUR:
+			# L'effet se produit côté ennemi (voir _executer_tour_ennemi)
+			_log("[Fusion Peur] Actif — le Totem intercepte et contre-attaque.")
 	fusion.decrementer_tour()
 	if not fusion.en_fusion:
 		_log("--- La fusion se termine ---")
@@ -238,18 +246,53 @@ func _executer_tour_ennemi(ennemi_actif: Ennemi) -> void:
 	var cibles: Array[Combattant] = []
 	if joueur.est_vivant():
 		cibles.append(joueur)
-	if totem.est_vivant() and not fusion.en_fusion:  # totem non ciblable pendant la fusion
+	if totem.est_vivant() and not fusion.en_fusion:
 		cibles.append(totem)
 	if cibles.is_empty():
 		return
 	var cible: Combattant = cibles[randi() % cibles.size()]
+
+	# Peur hors fusion : intercept ou redirection selon le flag actif
+	if totem.est_vivant() and not fusion.en_fusion:
+		if cible == joueur and totem.protection_active:
+			totem.protection_active = false
+			cible = totem
+			_log("%s attaque — le Totem intercepte le coup à ta place !" % ennemi_actif.nom_combattant)
+		elif cible == totem and totem.protection_egoiste:
+			totem.protection_egoiste = false
+			cible = joueur
+			_log("%s attaque le Totem — il esquive et te redirige le coup !" % ennemi_actif.nom_combattant)
+
+	# Fusion Peur : interception fiable + contre-attaque (totem absorbe, pas le joueur)
+	if fusion.en_fusion and totem.type_axe == Totem.TypeAxe.PEUR and cible == joueur and totem.est_vivant():
+		var degats_absorbes: int = ennemi_actif.degats_base
+		totem.pv_actuels = max(0, totem.pv_actuels - degats_absorbes)
+		totem.queue_redraw()
+		if totem.pv_actuels <= 0:
+			totem.call_deferred("emit_signal", "mort")
+		_log("%s attaque — [Fusion Peur] Le Totem absorbe %d dégâts !" % [ennemi_actif.nom_combattant, degats_absorbes])
+		var contre: int = totem.degats_base
+		ennemi_actif.pv_actuels = max(0, ennemi_actif.pv_actuels - contre)
+		ennemi_actif.queue_redraw()
+		_log("[Fusion Peur] Contre-attaque : %d dégâts sur %s !" % [contre, ennemi_actif.nom_combattant])
+		if not joueur.est_vivant():
+			return
+		_prochain_tour_ennemi()
+		return
+
 	var degats: int = ennemi_actif.jouer_tour(cible)
-	_log("%s attaque %s pour %d dégâts%s." % [
-		ennemi_actif.nom_combattant,
-		cible.nom_combattant,
-		degats,
+	_log("%s frappe %s pour %d dégâts%s." % [
+		ennemi_actif.nom_combattant, cible.nom_combattant, degats,
 		" (réduit)" if cible.en_defense else ""
 	])
+
+	# Fusion Colère : l'attaquant brûle en frappant le joueur
+	if fusion.en_fusion and totem.type_axe == Totem.TypeAxe.COLERE and cible == joueur:
+		var brulure: int = max(1, degats / 2)
+		ennemi_actif.pv_actuels = max(0, ennemi_actif.pv_actuels - brulure)
+		ennemi_actif.queue_redraw()
+		_log("[Fusion Colère] %s brûle pour %d dégâts en retour !" % [ennemi_actif.nom_combattant, brulure])
+
 	if not joueur.est_vivant():
 		return
 	_prochain_tour_ennemi()
@@ -311,6 +354,7 @@ func _log_action_totem(decision: Dictionary) -> void:
 	var cible: Combattant = decision["cible"]
 	var valeur: int = decision["valeur"]
 	var erratique: bool = decision["erratique"]
+	var auto_d: int = decision.get("auto_degat", 0)
 	match decision["action"]:
 		"soin":
 			if erratique and cible is Ennemi:
@@ -319,17 +363,23 @@ func _log_action_totem(decision: Dictionary) -> void:
 				_log("Le Totem soigne %s de %d PV." % [cible.nom_combattant, valeur])
 		"attaque":
 			fusion.ajouter_points(valeur)
-			if erratique:
+			if erratique and cible == joueur:
+				_log("Le Totem perd le contrôle et frappe le Joueur pour %d dégâts ! (colère)" % valeur)
+			elif erratique:
 				_log("Le Totem oublie de soigner et attaque pour %d dégâts." % valeur)
 			else:
 				_log("Le Totem attaque %s pour %d dégâts." % [cible.nom_combattant, valeur])
+			if auto_d > 0:
+				_log("Le Totem s'inflige %d dégâts. (colère)" % auto_d)
+		"protection":
+			_log("Le Totem se positionne pour te protéger.")
+		"protection_egoiste":
+			_log("Le Totem panique et se protège lui-même... (les coups seront redirigés vers toi !)")
+		"rien":
+			_log("Le Totem hésite et ne fait rien. (anxieux)")
 
 func _nom_palier(agitation: int) -> String:
-	match TotemIA.get_palier(agitation):
-		TotemIA.Palier.CALME: return "Calme"
-		TotemIA.Palier.NEUTRE: return "Neutre"
-		TotemIA.Palier.AGITE: return "Agité !"
-	return "?"
+	return totem.ia.nom_palier(agitation)
 
 func _log(texte: String) -> void:
 	journal.append_text(texte + "\n")

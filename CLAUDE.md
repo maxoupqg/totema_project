@@ -3,7 +3,7 @@
 ## Contexte du projet
 
 Prototype d'un RPG tour par tour. Le joueur combat en duo avec un **totem
-semi-autonome**. Le design de référence complet est dans **`proto_combat_totem.md`**
+semi-autonome**. Le design de référence complet est dans **`proto_combat_totem.md`** et dans ** `reference_axex_totem.md` ** pour les types de totems au départ 
 (à la racine du projet) — le consulter avant toute décision de design ou
 d'architecture. Ne pas s'en écarter sans le signaler explicitement.
 

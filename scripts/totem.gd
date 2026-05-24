@@ -3,23 +3,56 @@ extends Combattant
 
 signal agitation_change(nouvelle_valeur: int)
 
+enum TypeAxe { AGITATION, COLERE, PEUR }
+
+@export var type_axe: TypeAxe = TypeAxe.AGITATION
 @export var agitation: int = 0
 @export var soin_base: int = 20
 @export var agitation_par_coup: int = 20
 
+var ia: TotemIABase
+# Peur : flags activés sur le tour du totem, consommés lors des attaques ennemies
+var protection_active: bool = false     # bloque un coup destiné au joueur
+var protection_egoiste: bool = false    # esquive ses propres coups, redirige vers joueur
+
+func _ready() -> void:
+	match type_axe:
+		TypeAxe.AGITATION: ia = TotemIAAgitation.new()
+		TypeAxe.COLERE:    ia = TotemIAColere.new()
+		TypeAxe.PEUR:      ia = TotemIAPeur.new()
+	super._ready()
+
 func prendre_degats(montant: int) -> int:
 	var degats: int = super.prendre_degats(montant)
-	# Se prendre des coups agite le totem
 	_modifier_agitation(agitation_par_coup)
 	return degats
 
 func jouer_tour(joueur: Combattant, ennemi: Combattant) -> Dictionary:
-	var decision: Dictionary = TotemIA.choisir_action(agitation, joueur, ennemi)
+	# Reset des flags de protection au début de chaque tour
+	protection_active = false
+	protection_egoiste = false
+
+	var decision: Dictionary = ia.choisir_action(agitation, joueur, ennemi)
 	match decision["action"]:
 		"soin":
 			decision["valeur"] = _soigner(decision["cible"])
 		"attaque":
-			decision["valeur"] = decision["cible"].prendre_degats(degats_base)
+			var boost: float = decision.get("boost_degats", 1.0)
+			decision["valeur"] = decision["cible"].prendre_degats(int(degats_base * boost))
+		"protection":
+			protection_active = true
+		"protection_egoiste":
+			protection_egoiste = true
+		"rien":
+			pass
+
+	# Auto-dégât (Colère) — dégâts directs sur le totem, sans augmenter l'agitation
+	var auto_d: int = decision.get("auto_degat", 0)
+	if auto_d > 0:
+		pv_actuels = max(0, pv_actuels - auto_d)
+		queue_redraw()
+		if pv_actuels <= 0:
+			call_deferred("emit_signal", "mort")
 	return decision
 
 func _soigner(cible: Combattant) -> int:
@@ -35,7 +68,6 @@ func _modifier_agitation(delta: int) -> void:
 
 func _draw() -> void:
 	var ratio_agit: float = float(agitation) / 100.0
-	# Couleur qui glisse du calme vers l'agité
 	var couleur_agit: Color = couleur.lerp(Color(0.9, 0.35, 0.1, 1), ratio_agit)
 	draw_rect(Rect2(-40.0, -40.0, 80.0, 80.0), couleur_agit)
 	draw_rect(Rect2(-40.0, -40.0, 80.0, 80.0), Color.WHITE, false, 2.0)
@@ -51,6 +83,6 @@ func _draw() -> void:
 	draw_string(
 		ThemeDB.fallback_font,
 		Vector2(-40.0, 88.0),
-		"%s — %d/%d PV | Agit: %d" % [nom_combattant, pv_actuels, pv_max, agitation],
+		"%s — %d/%d PV | %d" % [nom_combattant, pv_actuels, pv_max, agitation],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12
 	)
