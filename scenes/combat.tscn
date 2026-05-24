@@ -1,8 +1,10 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/gestionnaire_combat.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/joueur.gd" id="2"]
-[ext_resource type="Script" path="res://scripts/ennemi.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/totem.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/ennemi.gd" id="4"]
+[ext_resource type="Script" path="res://scripts/fusion.gd" id="5"]
 
 [node name="Combat" type="Node2D"]
 script = ExtResource("1")
@@ -10,23 +12,50 @@ script = ExtResource("1")
 [node name="Combattants" type="Node2D" parent="."]
 
 [node name="Joueur" type="Node2D" parent="Combattants"]
-position = Vector2(300.0, 280.0)
+position = Vector2(220.0, 280.0)
 script = ExtResource("2")
 nom_combattant = "Joueur"
 pv_max = 100
 vitesse = 10
 degats_base = 20
 couleur = Color(0.2, 0.45, 0.9, 1)
-degats_magie = 25
+degats_magie = 28
 
-[node name="Ennemi" type="Node2D" parent="Combattants"]
-position = Vector2(950.0, 280.0)
+[node name="Totem" type="Node2D" parent="Combattants"]
+position = Vector2(430.0, 280.0)
 script = ExtResource("3")
-nom_combattant = "Ennemi"
+nom_combattant = "Totem"
+pv_max = 70
+vitesse = 9
+degats_base = 15
+couleur = Color(0.2, 0.75, 0.5, 1)
+agitation = 0
+soin_base = 20
+agitation_par_coup = 20
+
+[node name="Ennemi1" type="Node2D" parent="Combattants"]
+position = Vector2(950.0, 180.0)
+script = ExtResource("4")
+nom_combattant = "Ennemi A"
 pv_max = 80
-vitesse = 8
-degats_base = 12
+vitesse = 9
+degats_base = 11
 couleur = Color(0.85, 0.2, 0.2, 1)
+
+[node name="Ennemi2" type="Node2D" parent="Combattants"]
+position = Vector2(950.0, 380.0)
+script = ExtResource("4")
+nom_combattant = "Ennemi B"
+pv_max = 110
+vitesse = 7
+degats_base = 14
+couleur = Color(0.7, 0.1, 0.1, 1)
+
+[node name="Fusion" type="Node" parent="."]
+script = ExtResource("5")
+jauge_max = 150
+duree_fusion = 3
+soin_fusion = 40
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -34,21 +63,45 @@ couleur = Color(0.85, 0.2, 0.2, 1)
 offset_left = 490.0
 offset_top = 15.0
 offset_right = 790.0
-offset_bottom = 55.0
+offset_bottom = 50.0
 text = "En attente..."
 horizontal_alignment = 1
 
+[node name="LabelFusion" type="Label" parent="UI"]
+offset_left = 490.0
+offset_top = 55.0
+offset_right = 790.0
+offset_bottom = 80.0
+text = "Fusion : 0 / 150"
+horizontal_alignment = 1
+
+[node name="PanelCibles" type="Panel" parent="UI"]
+offset_left = 20.0
+offset_top = 390.0
+offset_right = 290.0
+offset_bottom = 500.0
+visible = false
+
+[node name="VBoxCibles" type="VBoxContainer" parent="UI/PanelCibles"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 262.0
+offset_bottom = 92.0
+
+[node name="LabelTitre" type="Label" parent="UI/PanelCibles/VBoxCibles"]
+text = "Choisir une cible :"
+
 [node name="PanelActions" type="Panel" parent="UI"]
 offset_left = 20.0
-offset_top = 510.0
+offset_top = 505.0
 offset_right = 290.0
-offset_bottom = 710.0
+offset_bottom = 715.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="UI/PanelActions"]
 offset_left = 8.0
 offset_top = 8.0
 offset_right = 262.0
-offset_bottom = 192.0
+offset_bottom = 202.0
 
 [node name="BtnAttaque" type="Button" parent="UI/PanelActions/VBoxContainer"]
 text = "Attaque"
@@ -62,10 +115,14 @@ text = "Magie"
 [node name="BtnFuir" type="Button" parent="UI/PanelActions/VBoxContainer"]
 text = "Fuir"
 
+[node name="BtnFusionner" type="Button" parent="UI/PanelActions/VBoxContainer"]
+text = "Fusionner !"
+disabled = true
+
 [node name="JournalCombat" type="RichTextLabel" parent="UI"]
 offset_left = 305.0
-offset_top = 510.0
+offset_top = 505.0
 offset_right = 1260.0
-offset_bottom = 710.0
+offset_bottom = 715.0
 bbcode_enabled = true
 scroll_following = true
