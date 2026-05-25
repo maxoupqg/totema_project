@@ -15,6 +15,7 @@ enum ActionEnAttente { AUCUNE, ATTAQUE, MAGIE }
 @onready var btn_magie: Button = $UI/PanelActions/VBoxContainer/BtnMagie
 @onready var btn_fuir: Button = $UI/PanelActions/VBoxContainer/BtnFuir
 @onready var btn_fusionner: Button = $UI/PanelActions/VBoxContainer/BtnFusionner
+@onready var btn_ressusciter: Button = $UI/PanelActions/VBoxContainer/BtnRessusciter
 @onready var panel_cibles: Panel = $UI/PanelCibles
 @onready var vbox_cibles: VBoxContainer = $UI/PanelCibles/VBoxCibles
 @onready var journal: RichTextLabel = $UI/JournalCombat
@@ -43,6 +44,7 @@ func _ready() -> void:
 	btn_magie.pressed.connect(_action_magie)
 	btn_fuir.pressed.connect(_action_fuir)
 	btn_fusionner.pressed.connect(_action_fusionner)
+	btn_ressusciter.pressed.connect(_action_ressusciter)
 
 	panel_cibles.visible = false
 	_demarrer_combat()
@@ -57,6 +59,7 @@ func _debut_tour_joueur() -> void:
 	etat = EtatCombat.TOUR_JOUEUR
 	_activer_boutons(true)
 	btn_fusionner.disabled = fusion.en_fusion or fusion.jauge < fusion.jauge_max or not totem.est_vivant()
+	btn_ressusciter.disabled = totem.est_vivant()
 	if fusion.en_fusion:
 		label_tour.text = "Ton tour [Fusion x%d]" % fusion.tours_restants
 	else:
@@ -69,6 +72,7 @@ func _activer_boutons(actif: bool) -> void:
 	btn_magie.disabled = not actif
 	btn_fuir.disabled = not actif
 	btn_fusionner.disabled = not actif
+	btn_ressusciter.disabled = not actif
 
 # — Sélection de cible —
 
@@ -166,6 +170,20 @@ func _action_fusionner() -> void:
 	_log("=== FUSION ! Le Totem et toi ne font plus qu'un (%d tours) ===" % fusion.duree_fusion)
 	_fin_tour_joueur()
 
+func _action_ressusciter() -> void:
+	if etat != EtatCombat.TOUR_JOUEUR or totem.est_vivant():
+		return
+	_activer_boutons(false)
+	totem.pv_actuels = totem.pv_max / 2
+	totem.visible = true
+	totem.queue_redraw()
+	fusion.reduire_jauge(0.2)
+	_maj_label_fusion()
+	totem._modifier_agitation(-20)
+	_log("Tu ressuscites le Totem ! Il revient à %d/%d PV. (fusion -20%%, agitation -20)" % [totem.pv_actuels, totem.pv_max])
+	_appliquer_bonus_fusion()
+	_fin_tour_joueur()
+
 # — Bonus fusion —
 
 func _appliquer_bonus_fusion() -> void:
@@ -191,7 +209,7 @@ func _appliquer_bonus_fusion() -> void:
 			_log("[Fusion Colère] Actif — les ennemis brûlent quand ils te frappent.")
 		Totem.TypeAxe.PEUR:
 			# L'effet se produit côté ennemi (voir _executer_tour_ennemi)
-			_log("[Fusion Peur] Actif — le Totem intercepte et contre-attaque.")
+			_log("[Fusion Peur] Actif — le Totem esquive et contre-attaque.")
 	fusion.decrementer_tour()
 	if not fusion.en_fusion:
 		_log("--- La fusion se termine ---")
@@ -250,33 +268,40 @@ func _executer_tour_ennemi(ennemi_actif: Ennemi) -> void:
 		cibles.append(totem)
 	if cibles.is_empty():
 		return
-	var cible: Combattant = cibles[randi() % cibles.size()]
+	# Les ennemis avec preference_totem ciblent le totem en priorité si disponible
+	var cible: Combattant
+	if totem.est_vivant() and not fusion.en_fusion and randf() < ennemi_actif.preference_totem:
+		cible = totem
+	else:
+		cible = cibles[randi() % cibles.size()]
 
-	# Peur hors fusion : intercept ou redirection selon le flag actif
+	# Peur hors fusion : esquive ou redirection selon le flag actif
 	if totem.est_vivant() and not fusion.en_fusion:
-		if cible == joueur and totem.protection_active:
-			totem.protection_active = false
-			cible = totem
-			_log("%s attaque — le Totem intercepte le coup à ta place !" % ennemi_actif.nom_combattant)
+		if cible == totem and totem.esquive_active:
+			totem.esquive_active = false  # consommé : une esquive par tour
+			var contre: int = totem.degats_base
+			ennemi_actif.pv_actuels = max(0, ennemi_actif.pv_actuels - contre)
+			ennemi_actif.queue_redraw()
+			fusion.ajouter_points(contre)
+			_log("%s attaque le Totem — il esquive et contre-attaque pour %d dégâts !" % [ennemi_actif.nom_combattant, contre])
+			_prochain_tour_ennemi()
+			return
+		elif cible == totem and totem.esquive_simple:
+			totem.esquive_simple = false  # consommé : une esquive par tour
+			_log("%s attaque le Totem — il esquive !" % ennemi_actif.nom_combattant)
+			_prochain_tour_ennemi()
+			return
 		elif cible == totem and totem.protection_egoiste:
-			totem.protection_egoiste = false
+			# Non consommé : redirige TOUS les coups ce tour vers le joueur
 			cible = joueur
 			_log("%s attaque le Totem — il esquive et te redirige le coup !" % ennemi_actif.nom_combattant)
 
-	# Fusion Peur : interception fiable + contre-attaque (totem absorbe, pas le joueur)
+	# Fusion Peur : esquive totale + contre-attaque sur chaque frappe ennemie
 	if fusion.en_fusion and totem.type_axe == Totem.TypeAxe.PEUR and cible == joueur and totem.est_vivant():
-		var degats_absorbes: int = ennemi_actif.degats_base
-		totem.pv_actuels = max(0, totem.pv_actuels - degats_absorbes)
-		totem.queue_redraw()
-		if totem.pv_actuels <= 0:
-			totem.call_deferred("emit_signal", "mort")
-		_log("%s attaque — [Fusion Peur] Le Totem absorbe %d dégâts !" % [ennemi_actif.nom_combattant, degats_absorbes])
 		var contre: int = totem.degats_base
 		ennemi_actif.pv_actuels = max(0, ennemi_actif.pv_actuels - contre)
 		ennemi_actif.queue_redraw()
-		_log("[Fusion Peur] Contre-attaque : %d dégâts sur %s !" % [contre, ennemi_actif.nom_combattant])
-		if not joueur.est_vivant():
-			return
+		_log("%s attaque — [Fusion Peur] Esquive ! Contre-attaque : %d dégâts sur %s !" % [ennemi_actif.nom_combattant, contre, ennemi_actif.nom_combattant])
 		_prochain_tour_ennemi()
 		return
 
@@ -288,7 +313,7 @@ func _executer_tour_ennemi(ennemi_actif: Ennemi) -> void:
 
 	# Fusion Colère : l'attaquant brûle en frappant le joueur
 	if fusion.en_fusion and totem.type_axe == Totem.TypeAxe.COLERE and cible == joueur:
-		var brulure: int = max(1, degats / 2)
+		var brulure: int = max(1, degats)
 		ennemi_actif.pv_actuels = max(0, ennemi_actif.pv_actuels - brulure)
 		ennemi_actif.queue_redraw()
 		_log("[Fusion Colère] %s brûle pour %d dégâts en retour !" % [ennemi_actif.nom_combattant, brulure])
@@ -371,10 +396,12 @@ func _log_action_totem(decision: Dictionary) -> void:
 				_log("Le Totem attaque %s pour %d dégâts." % [cible.nom_combattant, valeur])
 			if auto_d > 0:
 				_log("Le Totem s'inflige %d dégâts. (colère)" % auto_d)
-		"protection":
-			_log("Le Totem se positionne pour te protéger.")
+		"esquive":
+			_log("Le Totem est prêt à esquiver et à contre-attaquer.")
+		"esquive_simple":
+			_log("Le Totem se met sur ses gardes, prêt à esquiver.")
 		"protection_egoiste":
-			_log("Le Totem panique et se protège lui-même... (les coups seront redirigés vers toi !)")
+			_log("Le Totem panique et ne pense qu'à lui — les coups seront redirigés vers toi !")
 		"rien":
 			_log("Le Totem hésite et ne fait rien. (anxieux)")
 

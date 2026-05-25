@@ -13,6 +13,10 @@ var jauge: int = 0
 var en_fusion: bool = false
 var tours_restants: int = 0
 
+func reduire_jauge(fraction: float) -> void:
+	jauge = max(0, int(jauge * (1.0 - fraction)))
+	emit_signal("jauge_change", jauge, jauge_max)
+
 func ajouter_points(degats: int) -> void:
 	if en_fusion or jauge >= jauge_max:
 		return

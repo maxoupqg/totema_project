@@ -12,8 +12,9 @@ enum TypeAxe { AGITATION, COLERE, PEUR }
 
 var ia: TotemIABase
 # Peur : flags activés sur le tour du totem, consommés lors des attaques ennemies
-var protection_active: bool = false     # bloque un coup destiné au joueur
-var protection_egoiste: bool = false    # esquive ses propres coups, redirige vers joueur
+var esquive_active: bool = false        # esquive un coup + contre-attaque (Calme)
+var esquive_simple: bool = false        # esquive un coup sans contre-attaque (Méfiant)
+var protection_egoiste: bool = false    # esquive tout, redirige vers le joueur (Panique)
 
 func _ready() -> void:
 	match type_axe:
@@ -28,8 +29,9 @@ func prendre_degats(montant: int) -> int:
 	return degats
 
 func jouer_tour(joueur: Combattant, ennemi: Combattant) -> Dictionary:
-	# Reset des flags de protection au début de chaque tour
-	protection_active = false
+	# Reset des flags Peur au début de chaque tour
+	esquive_active = false
+	esquive_simple = false
 	protection_egoiste = false
 
 	var decision: Dictionary = ia.choisir_action(agitation, joueur, ennemi)
@@ -39,8 +41,10 @@ func jouer_tour(joueur: Combattant, ennemi: Combattant) -> Dictionary:
 		"attaque":
 			var boost: float = decision.get("boost_degats", 1.0)
 			decision["valeur"] = decision["cible"].prendre_degats(int(degats_base * boost))
-		"protection":
-			protection_active = true
+		"esquive":
+			esquive_active = true
+		"esquive_simple":
+			esquive_simple = true
 		"protection_egoiste":
 			protection_egoiste = true
 		"rien":

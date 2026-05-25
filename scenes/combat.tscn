@@ -22,9 +22,8 @@ couleur = Color(0.2, 0.45, 0.9, 1)
 [node name="Totem" type="Node2D" parent="Combattants" unique_id=1569438253]
 position = Vector2(430, 280)
 script = ExtResource("3")
-type_axe = 1
 nom_combattant = "Totem"
-pv_max = 70
+pv_max = 90
 vitesse = 9
 couleur = Color(0.2, 0.75, 0.5, 1)
 
@@ -40,11 +39,12 @@ couleur = Color(0.85, 0.2, 0.2, 1)
 [node name="Ennemi2" type="Node2D" parent="Combattants" unique_id=1397143638]
 position = Vector2(950, 380)
 script = ExtResource("4")
-nom_combattant = "Ennemi B"
-pv_max = 110
-vitesse = 7
-degats_base = 14
-couleur = Color(0.7, 0.1, 0.1, 1)
+preference_totem = 0.75
+nom_combattant = "Chasseur"
+pv_max = 140
+vitesse = 8
+degats_base = 13
+couleur = Color(0.55, 0.1, 0.45, 1)
 
 [node name="Fusion" type="Node" parent="." unique_id=1610684322]
 script = ExtResource("5")
@@ -118,6 +118,11 @@ text = "Fuir"
 layout_mode = 2
 disabled = true
 text = "Fusionner !"
+
+[node name="BtnRessusciter" type="Button" parent="UI/PanelActions/VBoxContainer" unique_id=2045318761]
+layout_mode = 2
+disabled = true
+text = "Ressusciter"
 
 [node name="JournalCombat" type="RichTextLabel" parent="UI" unique_id=1883850290]
 offset_left = 305.0

@@ -72,12 +72,12 @@ de l'axe est retournée contre l'adversaire).
 
 ## Axe 3 — Peur
 
-**Ce qu'il casse :** l'**esquive / la protection** (pour qui le totem se protège).
+**Ce qu'il casse :** l'**esquive / contre attaque** .
 
 | Palier | Comportement |
 |--------|--------------|
-| Calme  | Esquive automatiquement un coup par tour **pour protéger le joueur**. |
-| Neutre | Oublie d'esquiver par moment (la protection flanche). |
+| Calme  | Esquive automatiquement un coup qui cible le totem par tour et contre attaque automatiquement. |
+| Neutre | Esquive juste les coups sans contre attaque |
 | Palier 3 | Esquive **tout ce qui le vise**, mais pour se sauver lui — chaque coup esquivé est **redirigé en dégâts sur le joueur**. |
 
 **Fusion :** esquive tout + **contre-attaque déclenchée sur chaque esquive**
